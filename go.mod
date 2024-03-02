@@ -3,7 +3,15 @@ module github.com/lucasheriques/fastinvoice
 go 1.21.7
 
 require (
+	github.com/jaswdr/faker/v2 v2.1.0
+	github.com/spf13/cobra v1.8.0
+	github.com/spf13/viper v1.18.2
+	github.com/xuri/excelize/v2 v2.8.1
+)
+
+require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/go-faker/faker/v4 v4.3.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jung-kurt/gofpdf v1.16.2 // indirect
@@ -21,13 +29,10 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
-	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/spf13/viper v1.18.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/unidoc/unipdf/v3 v3.55.0 // indirect
 	github.com/xuri/efp v0.0.0-20231025114914-d1ff6096ae53 // indirect
-	github.com/xuri/excelize/v2 v2.8.1 // indirect
 	github.com/xuri/nfp v0.0.0-20230919160717-d98342af3f05 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect

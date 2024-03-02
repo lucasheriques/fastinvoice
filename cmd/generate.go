@@ -1,16 +1,39 @@
 package cmd
 
 import (
-	"fmt"
+	"html"
+	"html/template"
 	"log"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 
+	"github.com/jaswdr/faker/v2"
 	"github.com/spf13/cobra"
-	"github.com/xuri/excelize/v2"
 )
 
-var paymentType string
+type InvoiceData struct {
+	CompanyLogo    string
+	InvoiceNumber  string
+	InvoiceDate    string
+	DueDate        string
+	VendorInfo     string
+	CustomerInfo   string
+	PaymentMethod  string
+	PaymentDetails string
+	Items          []InvoiceItem
+	Total          string
+}
 
-const sheetName = "Invoice Template"
+type InvoiceItem struct {
+	Description string
+	Price       string
+}
+
+var paymentMethod string
+
+const tmplFile = "invoice.tmpl"
 
 // generateCmd represents the generate command
 var generateCmd = &cobra.Command{
@@ -19,63 +42,72 @@ var generateCmd = &cobra.Command{
 	Long: `Generate is a command to create an invoice with specific details based on the payment type.
 Example usage:
 
-./fastinvoice generate --payment-type ach`,
+./fastinvoice generate --payment-method ach`,
 	Run: func(cmd *cobra.Command, args []string) {
-		generateInvoice(paymentType)
+		generateInvoice(paymentMethod)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
-	generateCmd.Flags().StringVarP(&paymentType, "payment-type", "p", "", "Type of payment (ach, domestic wire, international wire, check)")
-	generateCmd.MarkFlagRequired("payment-type")
+	generateCmd.Flags().StringVarP(&paymentMethod, "payment-type", "p", "", "Type of payment (ach, domestic wire, international wire, check)")
+	generateCmd.MarkFlagRequired("payment-method")
 }
 
-func generateInvoice(paymentType string) {
-	f, err := excelize.OpenFile("template.xlsx")
+func generateData(paymentMethod string) InvoiceData {
+	fake := faker.New()
+	now := time.Now()
+
+	data := InvoiceData{
+		CompanyLogo: "https://example.com/logo.png",
+		// convert from int to string
+		InvoiceNumber: strconv.Itoa(fake.RandomNumber(5)),
+		// Invoice date should be today's date
+		InvoiceDate: now.Format("January 2, 2006"),
+		// Due date should be 30 days from today
+		DueDate: now.AddDate(0, 0, 30).Format("January 2, 2006"),
+		VendorInfo: `Sparksuite, Inc.
+		12345 Sunny Road
+		Sunnyville, CA 12345`,
+		CustomerInfo: `Acme Corp.
+		John Doe
+		john@example.com`,
+		PaymentMethod:  paymentMethod,
+		PaymentDetails: "1000",
+		Items: []InvoiceItem{
+			{Description: "Website design", Price: "$300.00"},
+			{Description: "Hosting (3 months)", Price: "$75.00"},
+			{Description: "Domain name (1 year)", Price: "$10.00"},
+		},
+		Total: "$385.00",
+	}
+
+	return data
+
+}
+
+func generateInvoice(paymentMethod string) {
+	invoiceData := generateData(paymentMethod)
+
+	templ, err := template.New(tmplFile).Funcs(template.FuncMap{
+		"nl2br": func(text string) template.HTML {
+			return template.HTML(strings.Replace(html.EscapeString(text), "\n", " <br/> ", -1))
+		},
+	}).ParseFiles(tmplFile)
 	if err != nil {
-		log.Fatalf("Failed to open template: %v", err)
+		log.Println("Error parsing template")
+		log.Fatal(err)
 	}
 
-	// Vendor Information
-	f.SetCellValue(sheetName, "B2", "Acme Corp")
-	f.SetCellValue(sheetName, "B3", "123 Street Address, City, State, Zip")
-	f.SetCellValue(sheetName, "B4", "www.acmecorp.com, info@acmecorp.com")
-	f.SetCellValue(sheetName, "B5", "+1234567890")
-
-	// Billed To Information
-	f.SetCellValue(sheetName, "B10", "John Doe")
-	f.SetCellValue(sheetName, "B11", "Client Company Name")
-	f.SetCellValue(sheetName, "B12", "Client Address")
-	f.SetCellValue(sheetName, "B13", "Client Phone, Client Email")
-
-	// Ship To Information
-	f.SetCellValue(sheetName, "D10", "Jane Doe / Dept")
-	f.SetCellValue(sheetName, "D11", "Client Company Name")
-	f.SetCellValue(sheetName, "D12", "Client Address")
-	f.SetCellValue(sheetName, "D13", "Client Phone")
-
-	// Invoice Metadata
-	f.SetCellValue(sheetName, "F9", "#INV00001")
-	f.SetCellValue(sheetName, "F10", "11/11/11")
-	f.SetCellValue(sheetName, "F11", "12/12/12")
-
-	// Example Line Item
-	f.MergeCell(sheetName, "B16", "C16")
-	f.SetCellValue(sheetName, "B16", "Service Name")
-	f.SetCellValue(sheetName, "D16", 2)      // Quantity
-	f.SetCellValue(sheetName, "E16", 500.00) // Unit Price
-	// Assuming F16 has a formula to calculate the total
-
-	// Payment Instructions and Terms
-	f.MergeCell(sheetName, "B36", "F36")
-	f.SetCellValue(sheetName, "B36", "Payment instructions here, e.g., bank, PayPal...")
-	f.MergeCell(sheetName, "B37", "F37")
-	f.SetCellValue(sheetName, "B37", "Terms here, e.g., warranty, returns policy...")
-
-	// Save the filled-out template to a new file
-	if err := f.SaveAs("filled_invoice.xlsx"); err != nil {
-		log.Fatalf("Failed to save filled invoice: %v", err)
+	file, err := os.Create("generated_invoice.html")
+	if err != nil {
+		log.Println("Error creating file")
+		log.Fatal(err)
 	}
-	fmt.Println("Invoice generated successfully")
+
+	err = templ.Execute(file, invoiceData)
+	if err != nil {
+		log.Println("Error executing template")
+		log.Fatal(err)
+	}
 }
