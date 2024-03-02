@@ -1,10 +1,15 @@
 package cmd
 
 import (
+	"bytes"
 	"html"
 	"html/template"
+	"io"
 	"log"
+	"mime/multipart"
+	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -87,6 +92,75 @@ func generateData(paymentMethod string) InvoiceData {
 
 }
 
+func convertAndDownloadPdf(htmlFilePath string) {
+	// URL of the Gotenberg API endpoint for converting HTML to PDF
+	apiURL := "http://localhost:3000/forms/chromium/convert/html"
+
+	// Prepare the file to be uploaded
+	file, err := os.Open(htmlFilePath)
+	if err != nil {
+		log.Fatalf("Error opening HTML file: %v", err)
+	}
+	defer file.Close()
+
+	// Prepare a form that you will submit to the endpoint
+	var requestBody bytes.Buffer
+	multiPartWriter := multipart.NewWriter(&requestBody)
+
+	// Add the HTML file to the form
+	fileWriter, err := multiPartWriter.CreateFormFile("files", filepath.Base(htmlFilePath))
+	if err != nil {
+		log.Fatalf("Error adding HTML file to form: %v", err)
+	}
+	_, err = io.Copy(fileWriter, file)
+	if err != nil {
+		log.Fatalf("Error copying HTML file to form: %v", err)
+	}
+
+	// Important: Close the multipart writer to set the terminating boundary
+	err = multiPartWriter.Close()
+	if err != nil {
+		log.Fatalf("Error closing multipart writer: %v", err)
+	}
+
+	// Create a new request to the API endpoint
+	request, err := http.NewRequest("POST", apiURL, &requestBody)
+	if err != nil {
+		log.Fatalf("Error creating request: %v", err)
+	}
+
+	// Set the content type to multipart/form-data followed by the boundary parameter
+	request.Header.Set("Content-Type", multiPartWriter.FormDataContentType())
+
+	// Perform the request
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		log.Fatalf("Error sending request to Gotenberg API: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check the response
+	if response.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to convert HTML to PDF, Gotenberg API responded with status code: %d", response.StatusCode)
+	}
+
+	// Create the PDF file
+	pdfFile, err := os.Create("output.pdf")
+	if err != nil {
+		log.Fatalf("Error creating PDF file: %v", err)
+	}
+	defer pdfFile.Close()
+
+	// Copy the response body (PDF content) to the PDF file
+	_, err = io.Copy(pdfFile, response.Body)
+	if err != nil {
+		log.Fatalf("Error saving PDF file: %v", err)
+	}
+
+	log.Println("PDF successfully created and saved as output.pdf")
+}
+
 func generateInvoice(paymentMethod string) {
 	invoiceData := generateData(paymentMethod)
 
@@ -100,15 +174,20 @@ func generateInvoice(paymentMethod string) {
 		log.Fatal(err)
 	}
 
-	file, err := os.Create("generated_invoice.html")
+	file, err := os.Create("index.html")
 	if err != nil {
 		log.Println("Error creating file")
 		log.Fatal(err)
 	}
+	defer file.Close()
+	// Also delete the file once the function is done
+	defer os.Remove(file.Name())
 
 	err = templ.Execute(file, invoiceData)
 	if err != nil {
 		log.Println("Error executing template")
 		log.Fatal(err)
 	}
+
+	convertAndDownloadPdf(file.Name())
 }
