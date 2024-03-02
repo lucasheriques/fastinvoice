@@ -1,6 +1,6 @@
 module github.com/lucasheriques/fastinvoice
 
-go 1.21.7
+go 1.21
 
 require (
 	github.com/jaswdr/faker/v2 v2.1.0

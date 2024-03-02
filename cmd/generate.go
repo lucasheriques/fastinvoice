@@ -66,14 +66,15 @@ func generateData(paymentMethod string) InvoiceData {
 		InvoiceDate: now.Format("January 2, 2006"),
 		// Due date should be 30 days from today
 		DueDate: now.AddDate(0, 0, 30).Format("January 2, 2006"),
-		VendorInfo: `Sparksuite, Inc.
-		12345 Sunny Road
-		Sunnyville, CA 12345`,
+		VendorInfo: `TechWave Solutions
+		8 10th St San Francisco
+		CA 94103
+		invoices@faketechwave.com`,
 		CustomerInfo: `Acme Corp.
 		John Doe
 		john@example.com`,
-		PaymentMethod:  paymentMethod,
-		PaymentDetails: "1000",
+		PaymentMethod:  "ACH",
+		PaymentDetails: "Routing number: 026001591. Account number: 7534028150001. Beneficiary name: TechWave Solutions",
 		Items: []InvoiceItem{
 			{Description: "Website design", Price: "$300.00"},
 			{Description: "Hosting (3 months)", Price: "$75.00"},
