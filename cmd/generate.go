@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"html"
 	"html/template"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jaswdr/faker/v2"
+	"github.com/lucasheriques/fastinvoice/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -60,7 +62,11 @@ func init() {
 
 func generateData(paymentMethod string) InvoiceData {
 	fake := faker.New()
+	companyName := fake.Company().Name()
 	now := time.Now()
+	companyAddress := fake.Company().Faker.Address()
+
+	companyEmail := "bills@" + utils.TransformIntoValidEmailName(companyName) + "." + fake.Internet().Domain()
 
 	data := InvoiceData{
 		CompanyLogo: "https://example.com/logo.png",
@@ -70,10 +76,10 @@ func generateData(paymentMethod string) InvoiceData {
 		InvoiceDate: now.Format("January 2, 2006"),
 		// Due date should be 30 days from today
 		DueDate: now.AddDate(0, 0, 30).Format("January 2, 2006"),
-		VendorInfo: `TechWave Solutions
-		8 10th St San Francisco
-		CA 94103
-		invoices@faketechwave.com`,
+		VendorInfo: fmt.Sprintf(`%s
+		%s
+		%s %s
+		%s`, companyName, companyAddress.StreetAddress(), companyAddress.StateAbbr(), companyAddress.SecondaryAddress(), companyEmail),
 		CustomerInfo: `Acme Corp.
 		John Doe
 		john@example.com`,
@@ -96,9 +102,6 @@ func convertAndDownloadPdf(filePath string) {
 		log.Fatalf("Error reading HTML file: %v", err)
 	}
 	defer os.Remove(filePath)
-
-	// also print the html content
-	log.Println(string(htmlContent))
 
 	// Create a new request with the HTML content
 	response, err := http.Post(convertAPIURL, "text/html", bytes.NewReader(htmlContent))
