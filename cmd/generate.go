@@ -6,10 +6,8 @@ import (
 	"html/template"
 	"io"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +37,7 @@ type InvoiceItem struct {
 var paymentMethod string
 
 const tmplFile = "invoice.tmpl"
+const convertAPIURL = "http://127.0.0.1:52171/convert/html"
 
 // generateCmd represents the generate command
 var generateCmd = &cobra.Command{
@@ -89,60 +88,28 @@ func generateData(paymentMethod string) InvoiceData {
 	}
 
 	return data
-
 }
 
-func convertAndDownloadPdf(htmlFilePath string) {
-	// URL of the Gotenberg API endpoint for converting HTML to PDF
-	apiURL := "http://localhost:3000/forms/chromium/convert/html"
-
-	// Prepare the file to be uploaded
-	file, err := os.Open(htmlFilePath)
+func convertAndDownloadPdf(filePath string) {
+	htmlContent, err := os.ReadFile(filePath)
 	if err != nil {
-		log.Fatalf("Error opening HTML file: %v", err)
+		log.Fatalf("Error reading HTML file: %v", err)
 	}
-	defer file.Close()
+	defer os.Remove(filePath)
 
-	// Prepare a form that you will submit to the endpoint
-	var requestBody bytes.Buffer
-	multiPartWriter := multipart.NewWriter(&requestBody)
+	// also print the html content
+	log.Println(string(htmlContent))
 
-	// Add the HTML file to the form
-	fileWriter, err := multiPartWriter.CreateFormFile("files", filepath.Base(htmlFilePath))
+	// Create a new request with the HTML content
+	response, err := http.Post(convertAPIURL, "text/html", bytes.NewReader(htmlContent))
 	if err != nil {
-		log.Fatalf("Error adding HTML file to form: %v", err)
-	}
-	_, err = io.Copy(fileWriter, file)
-	if err != nil {
-		log.Fatalf("Error copying HTML file to form: %v", err)
-	}
-
-	// Important: Close the multipart writer to set the terminating boundary
-	err = multiPartWriter.Close()
-	if err != nil {
-		log.Fatalf("Error closing multipart writer: %v", err)
-	}
-
-	// Create a new request to the API endpoint
-	request, err := http.NewRequest("POST", apiURL, &requestBody)
-	if err != nil {
-		log.Fatalf("Error creating request: %v", err)
-	}
-
-	// Set the content type to multipart/form-data followed by the boundary parameter
-	request.Header.Set("Content-Type", multiPartWriter.FormDataContentType())
-
-	// Perform the request
-	client := &http.Client{}
-	response, err := client.Do(request)
-	if err != nil {
-		log.Fatalf("Error sending request to Gotenberg API: %v", err)
+		log.Fatalf("Error sending request to the API: %v", err)
 	}
 	defer response.Body.Close()
 
 	// Check the response
 	if response.StatusCode != http.StatusOK {
-		log.Fatalf("Failed to convert HTML to PDF, Gotenberg API responded with status code: %d", response.StatusCode)
+		log.Fatalf("Failed to convert HTML to PDF, API responded with status code: %d", response.StatusCode)
 	}
 
 	// Create the PDF file
@@ -161,9 +128,7 @@ func convertAndDownloadPdf(htmlFilePath string) {
 	log.Println("PDF successfully created and saved as output.pdf")
 }
 
-func generateInvoice(paymentMethod string) {
-	invoiceData := generateData(paymentMethod)
-
+func generateHtmlFile(invoiceData InvoiceData) string {
 	templ, err := template.New(tmplFile).Funcs(template.FuncMap{
 		"nl2br": func(text string) template.HTML {
 			return template.HTML(strings.Replace(html.EscapeString(text), "\n", " <br/> ", -1))
@@ -180,8 +145,6 @@ func generateInvoice(paymentMethod string) {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	// Also delete the file once the function is done
-	defer os.Remove(file.Name())
 
 	err = templ.Execute(file, invoiceData)
 	if err != nil {
@@ -189,5 +152,13 @@ func generateInvoice(paymentMethod string) {
 		log.Fatal(err)
 	}
 
-	convertAndDownloadPdf(file.Name())
+	return file.Name()
+}
+
+func generateInvoice(paymentMethod string) {
+	invoiceData := generateData(paymentMethod)
+
+	htmlFile := generateHtmlFile(invoiceData)
+
+	convertAndDownloadPdf(htmlFile)
 }
